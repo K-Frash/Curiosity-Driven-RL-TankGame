@@ -1,0 +1,1 @@
+from gym_tanks.envs.tanks_environment import TanksEnvironment
