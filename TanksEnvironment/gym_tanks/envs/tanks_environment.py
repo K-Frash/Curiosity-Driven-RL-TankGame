@@ -33,9 +33,11 @@ CELL_BULLET_ENEMY = 5
 COLOR_GROUND = (209, 177, 161)
 COLOR_WALL = (59, 1, 0)
 COLOR_TANK_ME = (55, 55, 220)
-COLOR_BULLET_ME = (27, 27, 110)
+COLOR_BULLET_ME = (27, 100, 255)
 COLOR_TANK_ENEMY = (220, 0, 0)
-COLOR_BULLET_ENEMY = (110, 0, 0)
+COLOR_BULLET_ENEMY = (255, 69, 0)
+COLOR_TREAD = (40, 40, 40)
+COLOR_TREAD_DARK = (40, 40, 40)
 
 MOVEMENT_SPEED = 1
 SHOOT_COOLDOWN_LENGTH = 5
@@ -64,7 +66,7 @@ class State:
         self.bullets = bullets
 
     def __str__(self):
-        return f"Me: {self.tank_me_pos} - {self.tank_me_dir}\nEnemy{self.tank_enemy_pos} - {self.tank_enemy_dir}\nBullets: {self.bullets}"
+        return f"Me: {self.tank_me_pos} - {self.tank_me_dir}\nEnemy:{self.tank_enemy_pos} - {self.tank_enemy_dir}\nBullets: {self.bullets}"
 
 class TanksEnvironment(gym.Env):
 
@@ -152,22 +154,39 @@ class TanksEnvironment(gym.Env):
         newBullets = []
         for bullet in nextState.bullets:
             bullet.position = (bullet.position[0] + bullet.direction[0], bullet.position[1] + bullet.direction[1])
-            newCellMaterial = self.grid[bullet.position[0]][bullet.position[1]]
-            if newCellMaterial == CELL_TANK_ENEMY:
+            newCellMaterial = self.__INITIAL_GRID[bullet.position[0]][bullet.position[1]]
+            distance_x = abs(bullet.position[0] - self.lastState.tank_enemy_pos[0])
+            distance_y = abs(bullet.position[1] - self.lastState.tank_enemy_pos[1])
+            if distance_x <= 1 and distance_y <= 1:
                 done = True
                 reward = 1
             elif newCellMaterial != CELL_WALL:
                 newBullets.append(bullet)
         nextState.bullets = newBullets
 
-        info = {}
+        self.updateGrid(nextState)
+
+        info = self.grid
 
         self.lastState = nextState
 
         return nextState, reward, done, info
 
+    def updateGrid(self, newstate):
+        self.grid = deepcopy(self.__INITIAL_GRID)
+        for x in [-1, 0, 1]:
+            for y in [-1, 0, 1]:
+                if (self.grid[newstate.tank_me_pos[0] + x][newstate.tank_me_pos[1] + y] != CELL_WALL) and (self.grid[newstate.tank_me_pos[0] + x][newstate.tank_me_pos[1] + y] != CELL_TANK_ENEMY):
+                    self.grid[newstate.tank_me_pos[0] + x][newstate.tank_me_pos[1] + y] = CELL_TANK_ME
+                self.grid[newstate.tank_enemy_pos[0] + x][newstate.tank_enemy_pos[1] + y] = CELL_TANK_ENEMY
+        for bullet in newstate.bullets:
+            self.grid[bullet.position[0]][bullet.position[1]] = CELL_BULLET_ME
+
+    def getGrid(self):
+        return self.grid
+
     def isFreeCell(self, loc):
-        isWall = self.grid[loc[0]][loc[1]] == CELL_WALL
+        isWall = self.__INITIAL_GRID[loc[0]][loc[1]] == CELL_WALL
         isTank = loc == self.lastState.tank_enemy_pos
         return not isWall and not isTank
 
@@ -199,7 +218,11 @@ class TanksEnvironment(gym.Env):
             # self.grid[5][23] = CELL_TANK_ENEMY
             # self.grid[GRID_WIDTH-5-1][23] = CELL_TANK_ME
 
+        self.__INITIAL_GRID = deepcopy(self.grid)
+
         initialState = State((GRID_WIDTH-5-1, 23), (5, 23), (-1, 0), (1, 0), [])
+
+        self.updateGrid(initialState)
 
         self.lastState = initialState
 
@@ -207,7 +230,6 @@ class TanksEnvironment(gym.Env):
             print(row)    
 
         # Reset to initial state
-        pass
 
     def render(self, mode='human', close=False):
         pygame.event.get()
@@ -220,10 +242,13 @@ class TanksEnvironment(gym.Env):
 
                 pygame.draw.rect(self.screen, color, (i * 10, j * 10, 10, 10))
 
-        i, j = self.lastState.tank_me_pos
-        pygame.draw.rect(self.screen, COLOR_TANK_ME, (i * 10, j * 10, 10, 10))
+
         i, j = self.lastState.tank_enemy_pos
-        pygame.draw.rect(self.screen, COLOR_TANK_ENEMY, (i * 10, j * 10, 10, 10))
+        self.drawTank(i, j, self.lastState.tank_enemy_dir, COLOR_TANK_ENEMY)
+
+        i, j = self.lastState.tank_me_pos
+        self.drawTank(i, j, self.lastState.tank_me_dir, COLOR_TANK_ME)
+        
 
         for bullet in self.lastState.bullets:
             i, j = bullet.position
@@ -234,6 +259,41 @@ class TanksEnvironment(gym.Env):
         self.clock.tick(60)
         pygame.display.update()
     
+    def drawTank(self, i, j, tank_dir, TANK_COLOR):
+        pygame.draw.rect(self.screen, TANK_COLOR, (i * 10, j * 10, 10, 10))
+        if (tank_dir == (-1, -1) or tank_dir == (1, 1)):
+            pygame.draw.rect(self.screen, TANK_COLOR, ((i-1) * 10, (j-1) * 10, 10, 10))
+            pygame.draw.rect(self.screen, TANK_COLOR, ((i+1) * 10, (j+1) * 10, 10, 10))
+            pygame.draw.rect(self.screen, COLOR_TREAD, ((i-1) * 10, (j+0) * 10, 10, 10))
+            pygame.draw.rect(self.screen, COLOR_TREAD, ((i+1) * 10, (j+0) * 10, 10, 10))
+            pygame.draw.rect(self.screen, COLOR_TREAD, ((i+0) * 10, (j-1) * 10, 10, 10))
+            pygame.draw.rect(self.screen, COLOR_TREAD, ((i+0) * 10, (j+1) * 10, 10, 10))
+        elif (tank_dir == (-1, 1) or tank_dir == (1, -1)):
+            pygame.draw.rect(self.screen, TANK_COLOR, ((i-1) * 10, (j+1) * 10, 10, 10))
+            pygame.draw.rect(self.screen, TANK_COLOR, ((i+1) * 10, (j-1) * 10, 10, 10))
+            pygame.draw.rect(self.screen, COLOR_TREAD, ((i-1) * 10, (j+0) * 10, 10, 10))
+            pygame.draw.rect(self.screen, COLOR_TREAD, ((i+1) * 10, (j+0) * 10, 10, 10))
+            pygame.draw.rect(self.screen, COLOR_TREAD, ((i+0) * 10, (j-1) * 10, 10, 10))
+            pygame.draw.rect(self.screen, COLOR_TREAD, ((i+0) * 10, (j+1) * 10, 10, 10))
+        elif (tank_dir == (-1, 0) or tank_dir == (1, 0)):
+            pygame.draw.rect(self.screen, TANK_COLOR, ((i-1) * 10, (j+0) * 10, 10, 10))
+            pygame.draw.rect(self.screen, TANK_COLOR, ((i+1) * 10, (j-0) * 10, 10, 10))
+            pygame.draw.rect(self.screen, COLOR_TREAD, ((i+1) * 10, (j-1) * 10, 10, 10))
+            pygame.draw.rect(self.screen, COLOR_TREAD_DARK, ((i+0) * 10, (j-1) * 10, 10, 10))
+            pygame.draw.rect(self.screen, COLOR_TREAD, ((i-1) * 10, (j-1) * 10, 10, 10))
+            pygame.draw.rect(self.screen, COLOR_TREAD, ((i+1) * 10, (j+1) * 10, 10, 10))
+            pygame.draw.rect(self.screen, COLOR_TREAD_DARK, ((i+0) * 10, (j+1) * 10, 10, 10))
+            pygame.draw.rect(self.screen, COLOR_TREAD, ((i-1) * 10, (j+1) * 10, 10, 10))
+        elif (tank_dir == (0, -1) or tank_dir == (0, 1)):
+            pygame.draw.rect(self.screen, TANK_COLOR, ((i-0) * 10, (j+1) * 10, 10, 10))
+            pygame.draw.rect(self.screen, TANK_COLOR, ((i+0) * 10, (j-1) * 10, 10, 10))
+            pygame.draw.rect(self.screen, COLOR_TREAD, ((i+1) * 10, (j+1) * 10, 10, 10))
+            pygame.draw.rect(self.screen, COLOR_TREAD_DARK, ((i+1) * 10, (j+0) * 10, 10, 10))
+            pygame.draw.rect(self.screen, COLOR_TREAD, ((i+1) * 10, (j-1) * 10, 10, 10))
+            pygame.draw.rect(self.screen, COLOR_TREAD, ((i-1) * 10, (j+1) * 10, 10, 10))
+            pygame.draw.rect(self.screen, COLOR_TREAD_DARK, ((i-1) * 10, (j+0) * 10, 10, 10))
+            pygame.draw.rect(self.screen, COLOR_TREAD, ((i-1) * 10, (j-1) * 10, 10, 10))
+
     def close(self):
         pass
 
