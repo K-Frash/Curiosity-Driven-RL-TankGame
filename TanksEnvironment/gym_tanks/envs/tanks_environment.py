@@ -226,10 +226,11 @@ class TanksEnvironment(gym.Env):
 
         self.lastState = initialState
 
-        for row in self.grid:
-            print(row)    
+        # for row in self.grid:
+        #     print(row)    
 
-        # Reset to initial state
+        # Return initial state
+        return initialState
 
     def render(self, mode='human', close=False):
         pygame.event.get()
